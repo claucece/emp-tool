@@ -1048,6 +1048,63 @@ void DeriveExporterSecret() {
 	finalize_plain_prot();
 }
 
+void DeriveResumptionSecret() {
+	setup_plain_prot(true, "DeriveResumptionSecret.txt");
+
+	unsigned char master_secret_test_data[]=
+			{
+					0x7f, 0x28, 0x82, 0xbb, 0x9b, 0x9a, 0x46, 0x26,
+					0x59, 0x41, 0x65, 0x3e, 0x9c, 0x2f, 0x19, 0x06,
+					0x71, 0x18, 0x15, 0x1e, 0x21, 0xd1, 0x2e, 0x57,
+					0xa7, 0xb6, 0xac, 0xa1, 0xf8, 0x15, 0x0c, 0x8d
+			};
+
+        // with client hello
+	unsigned char handshake_hash_test_data[] =
+			{
+                                        0x9a, 0x3f, 0xd2, 0x41, 0xbe, 0x6c, 0x58, 0x07,
+                                        0xe4, 0x11, 0x9b, 0x8d, 0x72, 0xa5, 0x0c, 0xf9,
+                                        0x35, 0xda, 0x62, 0x1e, 0x48, 0xbc, 0x07, 0x93,
+                                        0xaf, 0x5d, 0xe7, 0x14, 0x68, 0x9c, 0x21, 0xf2
+			};
+
+	bool master_secret_plaintext[32 * 8];
+	for (int i = 0; i < 32; i++) {
+		int w = master_secret_test_data[i];
+		for (int j = 0; j < 8; j++) {
+			master_secret_plaintext[i * 8 + j] = w & 1;
+			w >>= 1;
+		}
+	}
+
+	bool handshake_hash_plaintext[256];
+	for (int i = 0; i < 32; i++) {
+		int w = handshake_hash_test_data[i];
+		for (int j = 0; j < 8; j++) {
+			handshake_hash_plaintext[i * 8 + j] = w & 1;
+			w >>= 1;
+		}
+	}
+
+	block master_secret[256];
+	ProtocolExecution::prot_exec->feed(master_secret, ALICE, master_secret_plaintext, 256);
+
+	block handshake_hash[256];
+	ProtocolExecution::prot_exec->feed(handshake_hash, ALICE, handshake_hash_plaintext, 256);
+
+	// resumption_secret = HKDF-Expand-Label(
+	//    key = master_secret,
+	//    label = "res master",
+	//    context = handshake_hash,
+	//    len = 32)
+
+	block resumption_secret[256];
+	hkdf_expand_label(master_secret, 256, "res master", handshake_hash, 256, resumption_secret, 32);
+	print_many_bytes(resumption_secret, 32); // 38bc1593731cabacd8d5adb3dbf5a248c5ec80ec20f9dda10bc1480c60fe83f0
+
+	finalize_plain_prot();
+}
+
 void DeriveClientTrafficKey() {
 	setup_plain_prot(true, "DeriveClientTrafficKey.txt");
 
@@ -1213,6 +1270,60 @@ void CreateGCMSequence(){
 	}
 }
 
+void DerivePSKSecret() {
+	setup_plain_prot(true, "DerivePSKSecret.txt");
+
+	unsigned char resumption_secret_test_data[]=
+			{
+                                       0x38, 0xBC, 0x15, 0x93, 0x73, 0x1C, 0xAB, 0xAC,
+                                       0xD8, 0xD5, 0xAD, 0xB3, 0xDB, 0xF5, 0xA2, 0x48,
+                                       0xC5, 0xEC, 0x80, 0xEC, 0x20, 0xF9, 0xDD, 0xA1,
+                                       0x0B, 0xC1, 0x48, 0x0C, 0x60, 0xFE, 0x83, 0xF0
+			};
+
+        // ticket nonce, which bizarelly seems to be one byte in boringssl?
+	unsigned char ticket_nonce_test_data[] =
+			{
+                                        0x01, 0x01,
+			};
+
+	bool resumption_secret_plaintext[32 * 8];
+	for (int i = 0; i < 32; i++) {
+		int w = resumption_secret_test_data[i];
+		for (int j = 0; j < 8; j++) {
+			resumption_secret_plaintext[i * 8 + j] = w & 1;
+			w >>= 1;
+		}
+	}
+
+	bool ticket_nonce_plaintext[16];
+	for (int i = 0; i < 2; i++) {
+		int w = ticket_nonce_test_data[i];
+		for (int j = 0; j < 8; j++) {
+			ticket_nonce_plaintext[i * 8 + j] = w & 1;
+			w >>= 1;
+		}
+	}
+
+	block resumption_secret[256];
+	ProtocolExecution::prot_exec->feed(resumption_secret, ALICE, resumption_secret_plaintext, 256);
+
+	block nonce[16];
+	ProtocolExecution::prot_exec->feed(nonce, ALICE, ticket_nonce_plaintext, 16);
+
+	// resumption_secret = HKDF-Expand-Label(
+	//    key = resumption_secret,
+	//    label = "resumption",
+	//    context = nonce,
+	//    len = 32)
+
+	block psk_secret[256];
+	hkdf_expand_label(resumption_secret, 256, "res master", nonce, 16, psk_secret, 32);
+	print_many_bytes(psk_secret, 32); // 5baf8c570e688dc54f6eb627833c37ea21805b6c7160aa5dba27cf3e022de556
+
+	finalize_plain_prot();
+}
+
 int main(int argc, char **argv) {
         //sha256_test();
 	//DeriveHandshakeSecret_PreMasterSecret();
@@ -1222,7 +1333,9 @@ int main(int argc, char **argv) {
 	//DeriveClientHandshakeKey();
 	//DeriveClientHandshakeIV();
 	//DeriveClientTrafficSecret();
-	DeriveExporterSecret();
+	//DeriveExporterSecret();
+        //DeriveResumptionSecret();
+        DerivePSKSecret();
 	//DeriveClientTrafficKey();
 	//DeriveClientTrafficIV();
 	//CreateGCMSequence();
