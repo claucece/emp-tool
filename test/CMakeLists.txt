@@ -17,6 +17,7 @@ endmacro()
 
 
 # Test cases
+add_test_case(generate_handshake_circuits)
 add_test_case(prg)
 add_test_case(hash)
 add_test_case(prp)
