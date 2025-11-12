@@ -47,7 +47,7 @@ void print_hash(block *output) {
 	}
 
 	for (int i = 0; i < 32; i++) {
-		printf("%02X ", digest_char[i]);
+		printf("%02x", digest_char[i]);
 	}
 	printf("\n");
 }
@@ -181,7 +181,7 @@ void sha256(block *input, block *output, int input_len) {
 			input_to_sha256_circuit[512 + i] = digest_bits[i];
 		}
 
-		BristolFormat bf("./emp-tool/circuits/files/bristol_format/sha-256.txt");
+		BristolFormat bf("./emp-tool/circuits/files/bristol_format/sha-256-multiblock-aligned.txt");
 		bf.compute(output_from_sha256_circuit, input_to_sha256_circuit, input_to_sha256_circuit);
 
 		for (int i = 0; i < 256; i++) {
@@ -202,6 +202,8 @@ void sha256(block *input, block *output, int input_len) {
 }
 
 void sha256_test() {
+        setup_plain_prot(true, "SHA256_test.txt");
+
 	printf("SHA256 test:\n");
 	block output[256];
 	block input[2048];
@@ -239,6 +241,8 @@ void sha256_test() {
 	}
 	sha256(input, output, 1024);
 	print_hash(output);
+
+        finalize_plain_prot();
 }
 
 void hmac(block *key, int key_len, block *data, int data_len, block *output) {
@@ -529,6 +533,39 @@ void hkdf_expand_label_test() {
 	print_hash(derived_secret);
 }
 
+void print_raw_output(block *output) {
+    bool bits[256];
+    ProtocolExecution::prot_exec->reveal(bits, PUBLIC, output, 256);
+
+    for (int i = 0; i < 32; i++) {
+        unsigned char b = 0;
+        for (int j = 0; j < 8; j++) {
+            b = (b << 1) | bits[i * 8 + j];
+        }
+        printf("%02X ", b);
+    }
+    printf("\n");
+}
+
+void print_bits(block *output, int nbits) {
+    bool bits[nbits];
+    ProtocolExecution::prot_exec->reveal(bits, PUBLIC, output, nbits);
+
+    for (int i = 0; i < nbits; i++) {
+        printf("%d", bits[i] ? 1 : 0);
+        if ((i + 1) % 8 == 0) printf(" ");
+    }
+    printf("\n");
+}
+
+void print_output(block *output, int nblocks) {
+    unsigned char *p = (unsigned char*) output;
+    for (int i = 0; i < nblocks * sizeof(block); i++) {
+        printf("%02X ", p[i]);
+    }
+    printf("\n");
+}
+
 void DeriveHandshakeSecret_PreMasterSecret() {
 	setup_plain_prot(true, "DeriveHandshakeSecret_PreMasterSecret.txt");
 	unsigned char derived_secert[] =
@@ -573,6 +610,8 @@ void DeriveHandshakeSecret_PreMasterSecret() {
 
 	block output[256];
 	hkdf_extract(salt, 256, ikm, 256, output);
+
+        //print_output(output, 256);
 	print_hash(output);
 
 	// expected output: fb9fc80689b3a5d02c33243bf69a1b1b20705588a794304a6e7120155edf149a
@@ -1120,16 +1159,17 @@ void CreateGCMSequence(){
 }
 
 int main(int argc, char **argv) {
+        //sha256_test();
 	DeriveHandshakeSecret_PreMasterSecret();
-	DeriveMasterSecret();
-	DeriveClientHandshakeSecret();
-	DeriveServerHandshakeSecret();
-	DeriveClientHandshakeKey();
-	DeriveClientHandshakeIV();
-	DeriveClientTrafficSecret();
-	DeriveClientTrafficKey();
-	DeriveClientTrafficIV();
-	CreateGCMSequence();
+	//DeriveMasterSecret();
+	//DeriveClientHandshakeSecret();
+	//DeriveServerHandshakeSecret();
+	//DeriveClientHandshakeKey();
+	//DeriveClientHandshakeIV();
+	//DeriveClientTrafficSecret();
+	//DeriveClientTrafficKey();
+	//DeriveClientTrafficIV();
+	//CreateGCMSequence();
 
 	return 0;
 }
