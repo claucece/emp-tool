@@ -68,7 +68,7 @@ void print_many_bytes(block *output, int num_bytes) {
 	}
 
 	for (int i = 0; i < num_bytes; i++) {
-		printf("%02X ", digest_char[i]);
+		printf("%02x", digest_char[i]);
 	}
 	printf("\n");
 }
@@ -611,7 +611,6 @@ void DeriveHandshakeSecret_PreMasterSecret() {
 	block output[256];
 	hkdf_extract(salt, 256, ikm, 256, output);
 
-        //print_output(output, 256);
 	print_hash(output);
 
 	// expected output: fb9fc80689b3a5d02c33243bf69a1b1b20705588a794304a6e7120155edf149a
@@ -993,6 +992,62 @@ void DeriveClientTrafficSecret() {
 	finalize_plain_prot();
 }
 
+void DeriveExporterSecret() {
+	setup_plain_prot(true, "DeriveExporterSecret.txt");
+
+	unsigned char master_secret_test_data[]=
+			{
+					0x7f, 0x28, 0x82, 0xbb, 0x9b, 0x9a, 0x46, 0x26,
+					0x59, 0x41, 0x65, 0x3e, 0x9c, 0x2f, 0x19, 0x06,
+					0x71, 0x18, 0x15, 0x1e, 0x21, 0xd1, 0x2e, 0x57,
+					0xa7, 0xb6, 0xac, 0xa1, 0xf8, 0x15, 0x0c, 0x8d
+			};
+
+	unsigned char handshake_hash_test_data[] =
+			{
+					0x22, 0x84, 0x4b, 0x93, 0x0e, 0x5e, 0x0a, 0x59,
+					0xa0, 0x9d, 0x5a, 0xc3, 0x5f, 0xc0, 0x32, 0xfc,
+					0x91, 0x16, 0x3b, 0x19, 0x38, 0x74, 0xa2, 0x65,
+					0x23, 0x6e, 0x56, 0x80, 0x77, 0x37, 0x8d, 0x8b
+			};
+
+	bool master_secret_plaintext[32 * 8];
+	for (int i = 0; i < 32; i++) {
+		int w = master_secret_test_data[i];
+		for (int j = 0; j < 8; j++) {
+			master_secret_plaintext[i * 8 + j] = w & 1;
+			w >>= 1;
+		}
+	}
+
+	bool handshake_hash_plaintext[256];
+	for (int i = 0; i < 32; i++) {
+		int w = handshake_hash_test_data[i];
+		for (int j = 0; j < 8; j++) {
+			handshake_hash_plaintext[i * 8 + j] = w & 1;
+			w >>= 1;
+		}
+	}
+
+	block master_secret[256];
+	ProtocolExecution::prot_exec->feed(master_secret, ALICE, master_secret_plaintext, 256);
+
+	block handshake_hash[256];
+	ProtocolExecution::prot_exec->feed(handshake_hash, ALICE, handshake_hash_plaintext, 256);
+
+	// exporter_secret = HKDF-Expand-Label(
+	//    key = master_secret,
+	//    label = "exp master",
+	//    context = handshake_hash,
+	//    len = 32)
+
+	block exporter_secret[256];
+	hkdf_expand_label(master_secret, 256, "exp master", handshake_hash, 256, exporter_secret, 32);
+	print_many_bytes(exporter_secret, 32); // 0798fa25da1e8b7487b245d7c4af9b24988de3aefa0ef63259fd6c9d0b52aeed
+
+	finalize_plain_prot();
+}
+
 void DeriveClientTrafficKey() {
 	setup_plain_prot(true, "DeriveClientTrafficKey.txt");
 
@@ -1104,7 +1159,7 @@ void CreateGCMSequence(){
 		block gcm_key_raw[128];
 		block gcm_key[128];
 
-		BristolFormat bf("./emp-tool/circuits/files/bristol_format/aes-non-expanded.txt");
+		BristolFormat bf("./emp-tool/circuits/files/bristol_format/aes128_full.txt");
 		bf.compute(gcm_key_raw, input, input);
 
 		for(int i = 0; i < 16; i++) {
@@ -1160,13 +1215,14 @@ void CreateGCMSequence(){
 
 int main(int argc, char **argv) {
         //sha256_test();
-	DeriveHandshakeSecret_PreMasterSecret();
+	//DeriveHandshakeSecret_PreMasterSecret();
 	//DeriveMasterSecret();
 	//DeriveClientHandshakeSecret();
 	//DeriveServerHandshakeSecret();
 	//DeriveClientHandshakeKey();
 	//DeriveClientHandshakeIV();
 	//DeriveClientTrafficSecret();
+	DeriveExporterSecret();
 	//DeriveClientTrafficKey();
 	//DeriveClientTrafficIV();
 	//CreateGCMSequence();
