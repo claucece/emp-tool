@@ -1318,8 +1318,8 @@ void DerivePSKSecret() {
 	//    len = 32)
 
 	block psk_secret[256];
-	hkdf_expand_label(resumption_secret, 256, "res master", nonce, 16, psk_secret, 32);
-	print_many_bytes(psk_secret, 32); // 5baf8c570e688dc54f6eb627833c37ea21805b6c7160aa5dba27cf3e022de556
+	hkdf_expand_label(resumption_secret, 256, "resumption", nonce, 16, psk_secret, 32);
+	print_many_bytes(psk_secret, 32); // 4f5bcfb60f6b7574b4d2e471dd084358ac3aea20d6ba83a9b62f0bc0363c5071
 
 	finalize_plain_prot();
 }
